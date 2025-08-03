@@ -1,76 +1,161 @@
-This demo shows how to implement Oauth browser based flow - bff (backend for frontend)
-https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps#name-backend-for-frontend-bff
-To share the auth session it shares domain cookie at .test.com between front end (app.test.com) and 
-back end (api.test.com) bff proxy is at domain api.test.com and for demo the resource server is Ms graph 
-api endpoint https://graph.microsoft.com. It implements following endpoints 
+# OAuth BFF (Backend For Frontend) Demo
 
-1> /session - it validates the session cookie session_id and returns success or false and 
-   for false cases it returns oidc server authorization challenge.
-   Front end should redirect the user brwoser to the returned endpoint as demoed in index.html
-2> /logout - it invalidates local session (removes cookie from local session ) and removes cookie from browser as well.
-3> /callback - it exchange authorization code and returns session cookie and stores AT / RT in local cache.
-4> /resouce  - any path starting with /resource is proxied to resource server after validating the session cookie and AT is 
-sent downstream.
+This demo showcases how to implement an **OAuth browser-based flow** using the **BFF (Backend For Frontend)** pattern.
 
-Further improvements -
-1> session_id cookie randomization and hardening. 
-2> for clustering of proxy / bff common cache / redis should be used.
+🔗 Reference: [OAuth 2.0 for Browser-Based Apps - BFF](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps#name-backend-for-frontend-bff)
 
+---
 
->>>>>>>Generate the self signed certificate for testing 
+## 🧩 Architecture
 
-A>Self signed certificate using openssl 
+To share the authentication session across applications, this setup uses a **shared domain cookie** at `.test.com` between:
+
+- **Frontend:** `https://app.test.com`
+- **Backend (BFF Proxy):** `https://api.test.com`
+
+The resource server used in this demo is Microsoft Graph API:  
+`https://graph.microsoft.com`
+
+---
+
+## 🔧 Endpoints
+
+| Endpoint        | Description |
+|----------------|-------------|
+| `/session`     | Validates the `session_id` cookie. If valid, returns success. If invalid, returns an OIDC authorization challenge URL for redirect. |
+| `/logout`      | Destroys the session both server-side and client-side (removes cookie). |
+| `/callback`    | Handles the OIDC authorization callback. Exchanges the code, sets the session cookie, and stores access/refresh tokens in cache. |
+| `/resource/*`  | Proxies requests to the resource server after validating the session and injecting the access token. |
+
+---
+
+## 📈 Flow Summary
+
+1. User visits `https://app.test.com`.
+2. Frontend checks `/session` on `https://api.test.com`:
+    - If not logged in, it redirects the browser to the OIDC authorization endpoint.
+3. After login, user is redirected to `https://api.test.com/callback`.
+4. BFF processes the callback, sets a secure `session_id` cookie on `.test.com`, and redirects to frontend.
+5. Frontend makes API calls (e.g., user info) to `/resource/*`, which BFF proxies to Microsoft Graph API using cached tokens.
+
+---
+
+## 🧪 Generate Self-Signed Certificate for Local Testing
+
+### A. Create SSL Artifacts with OpenSSL
+
+```bash
 mkdir ssl
 cd ssl
 
-# Step 1: Create private key
+# Step 1: Generate private key
 openssl genrsa -out test.key 2048
 
-# Step 2: Create certificate signing request (CSR)
+# Step 2: Create certificate signing request
 openssl req -new -key test.key -out test.csr \
   -subj "/C=IN/ST=State/L=City/O=TestOrg/OU=Dev/CN=*.test.com"
+```
 
-# Step 3: Create a config file for subjectAltName (SAN) san.cnf with following contents
+### B. Create `san.cnf` for SubjectAltName
 
+```ini
 [req]
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
+
 [req_distinguished_name]
+
 [v3_req]
 subjectAltName = @alt_names
+
 [alt_names]
 DNS.1 = *.test.com
 DNS.2 = api.test.com
 DNS.3 = app.test.com
+```
 
-# Step 4: Generate self-signed certificate valid for 1 year (365 days)
-openssl x509 -req -in test.csr -signkey test.key -out test.crt -days 365 -extensions v3_req -extfile san.cnf
-#If openssl is not available it can be installed https://slproweb.com/products/Win32OpenSSL.html
+### C. Generate Self-Signed Certificate
 
+```bash
+openssl x509 -req -in test.csr -signkey test.key -out test.crt -days 365 \
+  -extensions v3_req -extfile san.cnf
+```
 
->>>>>>> Update local host file for testing 
-B> To test front end and bff on same localhost edit the hosts file 
-127.0.0.1 api.test.com app.test.com 
+📌 *If OpenSSL is not installed: [Download here](https://slproweb.com/products/Win32OpenSSL.html)*
 
->>>>>>> Install node dependencies 
-C> npm install 
+---
 
->>>>>>> Edit the config.js file to update your authorization server configuration.
-D> Update /config.js for your authorization server configuration
+## 🛠️ Localhost Configuration
 
->>>>>>>>Start node server 
-E> node ./index.js 
+To resolve domains locally, update your `/etc/hosts` or `C:\Windows\System32\drivers\etc\hosts` file:
 
->>>>>>>>Open application in browser 
-F> https://app.test.com 
+```text
+127.0.0.1 api.test.com app.test.com
+```
 
->>>>>>>>Front end will redirect user browser to Authorization server. 
->>>>>>>>Post Auth user browser will land on https://api.test.com/callback 
->>>>>>>>This will set the session_id cookie at domain level .test.com and redirect user browser to https://app.test.com 
->>>>>>>>Click [User Info Call] - this will call https://api.test.com/resource/oidc/userinfo, bff will validate session cookie 
-and proxy all the request on /resource url to resource server (https://graph.microsoft.com/oidc/userinfo) along with token from 
-bff cache.
->>>>>>>>Response from resource server will be sent back to front-end 
+---
 
+## ⚙️ Setup Instructions
 
+### 1️⃣ Install Node.js Dependencies
 
+```bash
+npm install
+```
+
+### 2️⃣ Configure Authorization Server
+
+Edit the `config.js` file to set your OIDC/OAuth2 authorization server details.
+
+---
+
+## 🚀 Running the Application
+
+### 3️⃣ Start Node Server
+
+```bash
+node ./index.js
+```
+
+### 4️⃣ Access Application
+
+Visit in browser:
+
+```
+https://app.test.com
+```
+
+---
+
+## 🌐 Example Interaction
+
+1. Frontend loads and checks session via `GET /session`.
+2. If session is invalid, backend returns an authorization challenge URL.
+3. Browser is redirected to authorization server login.
+4. After successful auth, user lands on `https://api.test.com/callback`.
+5. Backend:
+   - Exchanges code for access and refresh tokens.
+   - Sets `session_id` cookie scoped to `.test.com`.
+   - Redirects to `https://app.test.com`.
+6. User clicks **[User Info Call]**:
+   - Frontend calls `https://api.test.com/resource/oidc/userinfo`.
+   - BFF verifies session, injects token, proxies to `https://graph.microsoft.com/oidc/userinfo`.
+   - Response is sent back to frontend.
+
+---
+
+## 🔄 Future Improvements
+
+- Implement secure randomization and hardening of the `session_id` cookie.
+- Integrate Redis or similar shared cache for clustered BFF deployments.
+
+---
+
+## ✅ Summary
+
+- Demonstrates secure OAuth 2.0 browser-based login using BFF pattern.
+- Shares session via domain cookie across frontend and backend.
+- Protects access tokens in backend; only session cookie is exposed to the browser.
+- Frontend interacts with resource servers via authenticated proxy.
+
+---
