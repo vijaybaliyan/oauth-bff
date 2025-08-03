@@ -8,10 +8,11 @@ This demo showcases how to implement an **OAuth browser-based flow** using the *
 
 ## 🧩 Architecture
 
-To share the authentication session across applications, this setup uses a **shared domain cookie** at `.test.com` between:
+To share the authentication session across applications, this setup uses a **shared domain cookie** at `.test.com` between front end and back end.
 
 - **Frontend:** `https://app.test.com`
 - **Backend (BFF Proxy):** `https://api.test.com`
+- **Resource Server:** https://graph.microsoft.com
 
 The resource server used in this demo is Microsoft Graph API:  
 `https://graph.microsoft.com`
@@ -148,6 +149,7 @@ https://app.test.com
 
 - Implement secure randomization and hardening of the `session_id` cookie.
 - Integrate Redis or similar shared cache for clustered BFF deployments.
+- Use refresh token to extend user session.
 
 ---
 
